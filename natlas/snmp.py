@@ -23,8 +23,10 @@
         along with this program; if not, write to the Free Software
         Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 '''
-
-from pysnmp.entity.rfc3413.oneliner import cmdgen
+import ipaddress
+import asyncio
+from pysnmp.hlapi.v3arch.asyncio import get_cmd, bulk_cmd
+from pysnmp.hlapi.v3arch.asyncio import SnmpEngine, CommunityData, UdpTransportTarget, Udp6TransportTarget, ContextData, ObjectType, ObjectIdentity
 
 SNMP_PORT = 161
 
@@ -50,6 +52,7 @@ OID_LLDP_DEVPORT        = '1.0.8802.1.1.2.1.4.1.1.7.0'
 OID_LLDP_DEVNAME        = '1.0.8802.1.1.2.1.4.1.1.9.0'
 OID_LLDP_DEVDESC        = '1.0.8802.1.1.2.1.4.1.1.10.0'
 OID_LLDP_DEVADDR        = '1.0.8802.1.1.2.1.4.2.1.5.0'
+OID_LLDP_REM_MAN_ADDR_ENTRY = "1.0.8802.1.1.2.1.4.2.1.2.0"
 
 OID_TRUNK_ALLOW         = '1.3.6.1.4.1.9.9.46.1.6.1.1.4'            # + ifidx (Allowed VLANs)
 OID_TRUNK_NATIVE        = '1.3.6.1.4.1.9.9.46.1.6.1.1.5'            # + ifidx (Native VLAN)
@@ -138,6 +141,51 @@ class natlas_snmp:
         self.v2_community = None
         self._ip = ip
 
+        self._ip_struct = ipaddress.ip_address(ip)
+        self._ipv = self._ip_struct.version
+
+    @staticmethod
+    async def get_cmd(community, ip, oid, port=SNMP_PORT, retries:int=0, timeout:int=30, lookupMib:bool=True):
+        _ip_struct = ipaddress.ip_address(ip)
+
+        xport = None
+        if _ip_struct.version == 4:
+            xport = await UdpTransportTarget.create((ip, port), retries=retries, timeout=timeout)
+        else:
+            xport = await Udp6TransportTarget.create((ip, port), retries=retries, timeout=timeout)
+
+        errorIndication, errorStatus, errorIndex, varBinds = await get_cmd(
+            SnmpEngine(),
+            CommunityData(community),
+            xport,
+            ContextData(),
+            ObjectType(ObjectIdentity(oid)), options={"lookupMib": lookupMib}
+        )
+        
+        return (errorIndication, errorStatus, errorIndex, varBinds)
+
+    @staticmethod
+    async def bulk_cmd(community, ip, oid, non_repeaters:int, max_repetitions:int, port=SNMP_PORT, retries:int=0, timeout:int=30, lookupMib:bool=True):
+        _ip_struct = ipaddress.ip_address(ip)
+
+        xport = None
+        if _ip_struct.version == 4:
+            xport = await UdpTransportTarget.create((ip, port), retries=retries, timeout=timeout)
+        else:
+            xport = await Udp6TransportTarget.create((ip, port), retries=retries, timeout=timeout)
+            
+        errorIndication, errorStatus, errorIndex, varBinds = await bulk_cmd(
+            SnmpEngine(),
+            CommunityData(community),
+            xport,
+            ContextData(),
+            non_repeaters,
+            max_repetitions,
+            ObjectType(ObjectIdentity(oid)), options={"lookupMib": lookupMib}
+        )
+        
+        return (errorIndication, errorStatus, errorIndex, varBinds)
+
     #
     # Try to find valid SNMP credentials in the provided list.
     # Returns 1 if success, 0 if failed.
@@ -150,13 +198,10 @@ class natlas_snmp:
 
             community = cred['community']
 
-            cmdGen = cmdgen.CommandGenerator()
-            errIndication, errStatus, errIndex, varBinds = cmdGen.getCmd(
-                            cmdgen.CommunityData(community),
-                            cmdgen.UdpTransportTarget((self._ip, SNMP_PORT)),
-                            '1.3.6.1.2.1.1.5.0',
-                            lookupNames = False, lookupValues = False
-            )
+            errIndication, errStatus, errIndex, varBinds = asyncio.run(natlas_snmp.get_cmd(community=community,
+                                                                        ip=self._ip,
+                                                                        oid=OID_SYSNAME,
+                                                                        lookupMib=True))
             if errIndication:
                 continue
             else:
@@ -172,12 +217,14 @@ class natlas_snmp:
     # Get single SNMP value at OID.
     #
     def get_val(self, oid):
-        cmdGen = cmdgen.CommandGenerator()
-        errIndication, errStatus, errIndex, varBinds = cmdGen.getCmd(
-                        cmdgen.CommunityData(self.v2_community),
-                        cmdgen.UdpTransportTarget((self._ip, SNMP_PORT), retries=2),
-                        oid, lookupNames = False, lookupValues = False
+        
+        errIndication, errStatus, errIndex, varBinds = asyncio.run(natlas_snmp.get_cmd(community=self.v2_community,
+                                                                    ip=self._ip,
+                                                                    oid=OID_SYSNAME,
+                                                                    retries=2,
+                                                                    lookupMib=True)
         )
+
 
         if errIndication:
             print('[E] get_snmp_val(%s): %s' % (self.v2_community, errIndication))
@@ -196,25 +243,29 @@ class natlas_snmp:
     # Returns 1 on success, 0 on failure.
     #
     def get_bulk(self, oid):
-        cmdGen = cmdgen.CommandGenerator()
-        errIndication, errStatus, errIndex, varBindTable = cmdGen.bulkCmd(
-                        cmdgen.CommunityData(self.v2_community),
-                        cmdgen.UdpTransportTarget((self._ip, SNMP_PORT), timeout=30, retries=2),
-                        0, 50,
-                        oid,
-                        lookupNames = False, lookupValues = False
-        )
+        errIndication, errStatus, errIndex, varBindTable = asyncio.run(natlas_snmp.bulk_cmd(
+                        community=self.v2_community,
+                        ip=self._ip,
+                        non_repeaters=0,
+                        max_repetitions=50,
+                        oid=oid,
+                        retries=2,
+                        timeout=30,
+                     
+                        lookupMib=True
+        ))
 
         if errIndication:
             print('[E] get_snmp_bulk(%s): %s' % (self.v2_community, errIndication))
         else:
             ret = []
             for r in varBindTable:
-                for n, v in r:
-                    n = str(n)
-                    if (n.startswith(oid) == 0):
-                        return ret
-                    ret.append(r)
+
+                with_mib = r[0]
+                print(f"OID: {with_mib.get_oid()} ({with_mib.get_label()}), Value: {r[1]}")
+                if not str(with_mib.get_oid()).startswith(oid):
+                    return ret
+                ret.append(r)
             return ret
 
         return None
@@ -227,11 +278,10 @@ class natlas_snmp:
         if (varBindTable == None):
             return None
 
-        for r in varBindTable:
-            for n, v in r:
-                n = str(n)
-                if (n == name):
-                    return v.prettyPrint()
+        for n, v in varBindTable:
+            n = str(n)
+            if n == name:
+                return v.prettyPrint()
         return None
 
 

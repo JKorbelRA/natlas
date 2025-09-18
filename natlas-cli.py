@@ -30,10 +30,12 @@ import datetime
 import os
 import re
 from timeit import default_timer as timer
-from distutils.version import LooseVersion
+from packaging.version import parse
+from pathlib import Path
 
 import natlas
 
+SCRIPT_DIR = Path(__file__).parent.resolve().absolute()
 DEFAULT_OPT_DEPTH   = 100
 DEFAULT_OPT_TITLE   = 'natlas Diagram'
 DEFAULT_OPT_CONF    = './natlas.conf'
@@ -113,9 +115,9 @@ def print_banner():
     print('Python %s\n' % sys.version.split(' ')[0])
 
 def load_modules():
-    sys.path.insert(0, './modules')
+    sys.path.insert(0, str(SCRIPT_DIR / 'modules'))
     ret = []
-    for f in os.listdir('./modules'):
+    for f in os.listdir(str(SCRIPT_DIR / 'modules')):
         if (f[-3:] == '.py'):
             mod = None
             try:
@@ -220,7 +222,7 @@ def does_mod_accept_api(mod):
     if (mod.require_api == None):
         # no minimum version specified
         return 1
-    accepted = (LooseVersion(mod.require_api) <= LooseVersion(natlas.__version__))
+    accepted = (parse(mod.require_api) <= parse(natlas.__version__))
     if (accepted == 0):
         if (re.match('^.*-dev.*$', natlas.__version__)):
             return 2

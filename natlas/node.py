@@ -307,14 +307,13 @@ class natlas_node:
             if (self.ifip_vbtbl == None):
                 self.ifip_vbtbl         = snmpobj.get_bulk(OID_IF_IP)
 
-            for row in self.svi_vbtbl:
-                for n, v in row:
-                    n = str(n)
-                    vlan = n.split('.')[14]
-                    svi = natlas_node_svi(vlan)
-                    svi_ips = self.__get_cidrs_from_ifidx(v)
-                    svi.ip.extend(svi_ips)
-                    self.svis.append(svi)
+            for n, v in self.svi_vbtbl:
+                n = str(n)
+                vlan = n.split('.')[14]
+                svi = natlas_node_svi(vlan)
+                svi_ips = self.__get_cidrs_from_ifidx(v)
+                svi.ip.extend(svi_ips)
+                self.svis.append(svi)
 
         # loopback
         if (self.opts.get_lo == True):
@@ -323,15 +322,14 @@ class natlas_node:
             if (self.ifip_vbtbl == None):
                 self.ifip_vbtbl = snmpobj.get_bulk(OID_IF_IP)
 
-            for row in self.ethif_vbtbl:
-                for n, v in row:
-                    n = str(n)
-                    if (n.startswith(OID_ETH_IF_TYPE) & (v == 24)):
-                        ifidx = n.split('.')[10]
-                        lo_name = snmpobj.cache_lookup(self.ethif_vbtbl, OID_ETH_IF_DESC + '.' + ifidx)
-                        lo_ips = self.__get_cidrs_from_ifidx(ifidx)
-                        lo = natlas_node_lo(lo_name, lo_ips)
-                        self.loopbacks.append(lo)
+            for n, v in self.ethif_vbtbl:
+                n = str(n)
+                if (n.startswith(OID_ETH_IF_TYPE) & (v == 24)):
+                    ifidx = n.split('.')[10]
+                    lo_name = snmpobj.cache_lookup(self.ethif_vbtbl, f"{OID_ETH_IF_DESC}.{ifidx}")
+                    lo_ips = self.__get_cidrs_from_ifidx(ifidx)
+                    lo = natlas_node_lo(lo_name, lo_ips)
+                    self.loopbacks.append(lo)
 
         # bootfile
         if (self.opts.get_bootf):
@@ -353,17 +351,16 @@ class natlas_node:
     def __get_cidrs_from_ifidx(self, ifidx):
         ips = []
 
-        for ifrow in self.ifip_vbtbl:
-            for ifn, ifv in ifrow:
-                ifn = str(ifn)
-                if (ifn.startswith(OID_IF_IP_ADDR)):
-                    if (str(ifv) == str(ifidx)):
-                        t = ifn.split('.')
-                        ip = ".".join(t[10:])
-                        mask = self.snmpobj.cache_lookup(self.ifip_vbtbl, OID_IF_IP_NETM + ip)
-                        nbits = util.get_net_bits_from_mask(mask)
-                        cidr = '%s/%i' % (ip, nbits)
-                        ips.append(cidr)
+        for ifn, ifv in self.ifip_vbtbl:
+            ifn_str = str(ifn)
+            if ifn_str.startswith(OID_IF_IP_ADDR):
+                if str(ifv) == str(ifidx):
+                    t = ifn_str.split('.')
+                    ip = ".".join(t[10:])
+                    mask = self.snmpobj.cache_lookup(self.ifip_vbtbl, OID_IF_IP_NETM + ip)
+                    nbits = util.get_net_bits_from_mask(mask)
+                    cidr = '%s/%i' % (ip, nbits)
+                    ips.append(cidr)
         return ips
 
 
@@ -408,50 +405,49 @@ class natlas_node:
         # cache some common MIB trees
         self.__cache_common_mibs()
 
-        for row in self.cdp_vbtbl:
-            for name, val in row:
-                name = str(name)
-                # process only if this row is a CDP_DEVID
-                if (name.startswith(OID_CDP_DEVID) == 0):
-                    continue
+        for name, val in self.cdp_vbtbl:
+            name = str(name)
+            # process only if this row is a CDP_DEVID
+            if (name.startswith(OID_CDP_DEVID) == 0):
+                continue
 
-                t = name.split('.')
-                ifidx = t[14]
-                ifidx2 = t[15]
+            t = name.split('.')
+            ifidx = t[14]
+            ifidx2 = t[15]
 
-                # get remote IP
-                rip = snmpobj.cache_lookup(self.cdp_vbtbl, OID_CDP_IPADDR + '.' + ifidx + '.' + ifidx2)
-                rip = util.convert_ip_int_str(rip)
+            # get remote IP
+            rip = snmpobj.cache_lookup(self.cdp_vbtbl, f"{OID_CDP_IPADDR}.{ifidx}.{ifidx2}")
+            rip = util.convert_ip_int_str(rip)
 
-                # get local port
-                lport = self.__get_ifname(ifidx)
+            # get local port
+            lport = self.__get_ifname(ifidx)
 
-                # get remote port
-                rport = snmpobj.cache_lookup(self.cdp_vbtbl, OID_CDP_DEVPORT + '.' + ifidx + '.' + ifidx2)
-                rport = self.shorten_port_name(rport)
+            # get remote port
+            rport = snmpobj.cache_lookup(self.cdp_vbtbl, f"{OID_CDP_DEVPORT}.{ifidx}.{ifidx2}")
+            rport = self.shorten_port_name(rport)
 
-                # get remote platform
-                rplat = snmpobj.cache_lookup(self.cdp_vbtbl, OID_CDP_DEVPLAT + '.' + ifidx + '.' + ifidx2)
+            # get remote platform
+            rplat = snmpobj.cache_lookup(self.cdp_vbtbl, f"{OID_CDP_DEVPLAT}.{ifidx}.{ifidx2}")
 
-                # get IOS version
-                rios = snmpobj.cache_lookup(self.cdp_vbtbl, OID_CDP_IOS + '.' + ifidx + '.' + ifidx2)
-                if (rios != None):
-                    try:
-                        rios = binascii.unhexlify(rios[2:])
-                    except:
-                        pass
-                    rios = self.__format_ios_ver(rios)
+            # get IOS version
+            rios = snmpobj.cache_lookup(self.cdp_vbtbl, f"{OID_CDP_IOS}.{ifidx}.{ifidx2}")
+            if (rios != None):
+                try:
+                    rios = binascii.unhexlify(rios[2:])
+                except:
+                    pass
+                rios = self.__format_ios_ver(rios)
 
-                link                  = self.__get_node_link_info(ifidx, ifidx2)
-                link.remote_name      = val.prettyPrint()
-                link.remote_ip        = rip
-                link.discovered_proto = 'cdp'
-                link.local_port       = lport
-                link.remote_port      = rport
-                link.remote_plat      = rplat
-                link.remote_ios       = rios
+            link                  = self.__get_node_link_info(ifidx, ifidx2)
+            link.remote_name      = val.prettyPrint()
+            link.remote_ip        = rip
+            link.discovered_proto = 'cdp'
+            link.local_port       = lport
+            link.remote_port      = rport
+            link.remote_plat      = rplat
+            link.remote_ios       = rios
 
-                neighbors.append(link)
+            neighbors.append(link)
 
         return neighbors
 
@@ -472,60 +468,59 @@ class natlas_node:
 
         self.__cache_common_mibs()
 
-        for row in self.lldp_vbtbl:
-            for name, val in row:
-                name = str(name)
-                if (name.startswith(OID_LLDP_TYPE) == 0):
-                    continue
+        for name, val in self.lldp_vbtbl:
+            name = str(name)
+            if not name.startswith(OID_LLDP_TYPE):
+                continue
 
-                t = name.split('.')
-                ifidx = t[12]
-                ifidx2 = t[13]
+            t = name.split('.')
+            ifidx = t[12]
+            ifidx2 = t[13]
 
-                rip = ''
-                for r in self.lldp_vbtbl:
-                    for     n, v in r:
-                        n = str(n)
-                        if (n.startswith(OID_LLDP_DEVADDR + '.' + ifidx + '.' + ifidx2)):
-                            t2 = n.split('.')
-                            rip = '.'.join(t2[16:])
+            rip = ''
+            for n, v in self.lldp_vbtbl:
+                n = str(n)
+                if (n.startswith(f"{OID_LLDP_DEVADDR}.{ifidx}.{ifidx2}")):
+                    t2 = n.split('.')
+                    rip = '.'.join(t2[16:])
+
+            if rip == "":
+                addr = f"{OID_LLDP_REM_MAN_ADDR_ENTRY}.{ifidx}.{ifidx2}"
+                rip = snmpobj.cache_lookup(self.lldp_vbtbl, addr)
+                print(f"Found alternate LLDP Address: {rip}")
 
 
-                lport = self.__get_ifname(ifidx)
 
-                rport = snmpobj.cache_lookup(self.lldp_vbtbl, OID_LLDP_DEVPORT + '.' + ifidx + '.' + ifidx2)
-                rport = self.shorten_port_name(rport)
+            lport = self.__get_ifname(ifidx)
 
-                devid = snmpobj.cache_lookup(self.lldp_vbtbl, OID_LLDP_DEVID + '.' + ifidx + '.' + ifidx2)
+            rport = snmpobj.cache_lookup(self.lldp_vbtbl, f"{OID_LLDP_DEVPORT}.{ifidx}.{ifidx2}")
+            rport = self.shorten_port_name(rport)
+
+            mac_seg = snmpobj.cache_lookup(self.lldp_vbtbl, f"{OID_LLDP_DEVID}.{ifidx}.{ifidx2}")
+
+            rimg = snmpobj.cache_lookup(self.lldp_vbtbl, f"{OID_LLDP_DEVDESC}.{ifidx}.{ifidx2}")
+            if (rimg != None):
                 try:
-                    mac_seg = [devid[x:x+4] for x in xrange(2, len(devid), 4)]
-                    devid = '.'.join(mac_seg)
+                    rimg = binascii.unhexlify(rimg[2:])
                 except:
                     pass
+                rimg = self.__format_ios_ver(rimg)
 
-                rimg = snmpobj.cache_lookup(self.lldp_vbtbl, OID_LLDP_DEVDESC + '.' + ifidx + '.' + ifidx2)
-                if (rimg != None):
-                    try:
-                        rimg = binascii.unhexlify(rimg[2:])
-                    except:
-                        pass
-                    rimg = self.__format_ios_ver(rimg)
+            name = snmpobj.cache_lookup(self.lldp_vbtbl, f"{OID_LLDP_DEVNAME}.{ifidx}.{ifidx2}")
+            if not name:
+                name = mac_seg
 
-                name = snmpobj.cache_lookup(self.lldp_vbtbl, OID_LLDP_DEVNAME + '.' + ifidx + '.' + ifidx2)
-                if ((name == None) | (name == '')):
-                    name = devid
+            link                  = self.__get_node_link_info(ifidx, ifidx2)
+            link.remote_ip        = rip
+            link.remote_name      = name
+            link.discovered_proto = 'lldp'
+            link.local_port       = lport
+            link.remote_port      = rport
+            link.remote_plat      = None
+            link.remote_ios       = rimg
+            link.remote_mac       = mac_seg
 
-                link                  = self.__get_node_link_info(ifidx, ifidx2)
-                link.remote_ip        = rip
-                link.remote_name      = name
-                link.discovered_proto = 'lldp'
-                link.local_port       = lport
-                link.remote_port      = rport
-                link.remote_plat      = None
-                link.remote_ios       = rimg
-                link.remote_mac       = devid
-
-                neighbors.append(link)
+            neighbors.append(link)
 
         return neighbors
 
@@ -534,23 +529,23 @@ class natlas_node:
         snmpobj = self.snmpobj
 
         # get link type (trunk ?)
-        link_type = snmpobj.cache_lookup(self.link_type_vbtbl, OID_TRUNK_VTP + '.' + ifidx)
+        link_type = snmpobj.cache_lookup(self.link_type_vbtbl, f"{OID_TRUNK_VTP}.{ifidx}")
 
         native_vlan = None
         allowed_vlans = 'All'
         if (link_type == '1'):
-            native_vlan = snmpobj.cache_lookup(self.trk_native_vbtbl, OID_TRUNK_NATIVE + '.' + ifidx)
+            native_vlan = snmpobj.cache_lookup(self.trk_native_vbtbl, f"{OID_TRUNK_NATIVE}.{ifidx}")
 
-            allowed_vlans = snmpobj.cache_lookup(self.trk_allowed_vbtbl, OID_TRUNK_ALLOW + '.' + ifidx)
+            allowed_vlans = snmpobj.cache_lookup(self.trk_allowed_vbtbl, f"{OID_TRUNK_ALLOW}.{ifidx}")
             allowed_vlans = self.__parse_allowed_vlans(allowed_vlans)
 
         # get LAG membership
-        lag = snmpobj.cache_lookup(self.lag_vbtbl, OID_LAG_LACP + '.' + ifidx)
+        lag = snmpobj.cache_lookup(self.lag_vbtbl, f"{OID_LAG_LACP}.{ifidx}")
         lag_ifname = self.__get_ifname(lag)
         lag_ips = self.__get_cidrs_from_ifidx(lag)
 
         # get VLAN info
-        vlan = snmpobj.cache_lookup(self.vlan_vbtbl, OID_IF_VLAN + '.' + ifidx)
+        vlan = snmpobj.cache_lookup(self.vlan_vbtbl, f"{OID_IF_VLAN}.{ifidx}")
 
         # get IP address
         lifips = self.__get_cidrs_from_ifidx(ifidx)
@@ -639,32 +634,28 @@ class natlas_node:
         if (class_vbtbl == None):
             return
 
-        for row in class_vbtbl:
-            for n, v in row:
-                n = str(n)
-                if (v != ENTPHYCLASS_CHASSIS):
-                    continue
+        for n, v in class_vbtbl:
+            n = str(n)
+            if (v != ENTPHYCLASS_CHASSIS):
+                continue
 
-                t = n.split('.')
-                idx = t[12]
+            t = n.split('.')
+            idx = t[12]
 
-                if (self.opts.get_serial):  self.serial = snmpobj.cache_lookup(serial_vbtbl, OID_ENTPHYENTRY_SERIAL + '.' + idx)
-                if (self.opts.get_plat):    self.plat   = snmpobj.cache_lookup(platf_vbtbl, OID_ENTPHYENTRY_PLAT + '.' + idx)
-                if (self.opts.get_ios):     self.ios    = snmpobj.cache_lookup(ios_vbtbl, OID_ENTPHYENTRY_SOFTWARE + '.' + idx)
+            if (self.opts.get_serial):  self.serial = snmpobj.cache_lookup(serial_vbtbl, f"{OID_ENTPHYENTRY_SERIAL}.{idx}")
+            if (self.opts.get_plat):    self.plat   = snmpobj.cache_lookup(platf_vbtbl, f"{OID_ENTPHYENTRY_PLAT}.{idx}")
+            if (self.opts.get_ios):     self.ios    = snmpobj.cache_lookup(ios_vbtbl, f"{OID_ENTPHYENTRY_SOFTWARE}.{idx}")
 
         if (self.opts.get_ios):
             # modular switches might have IOS on a module rather than chassis
             if (self.ios == ''):
-                for row in class_vbtbl:
-                    for n, v in row:
-                        n = str(n)
-                        if (v != ENTPHYCLASS_MODULE):
-                            continue
-                        t = n.split('.')
-                        idx = t[12]
-                        self.ios = snmpobj.cache_lookup(ios_vbtbl, OID_ENTPHYENTRY_SOFTWARE + '.' + idx)
-                        if (self.ios != ''):
-                            break
+                for n, v in class_vbtbl:
+                    n = str(n)
+                    if (v != ENTPHYCLASS_MODULE):
+                        continue
+                    t = n.split('.')
+                    idx = t[12]
+                    self.ios = snmpobj.cache_lookup(ios_vbtbl, f"{OID_ENTPHYENTRY_SOFTWARE}.{idx}")
                     if (self.ios != ''):
                         break
             self.ios = self.__format_ios_ver(self.ios)
@@ -680,7 +671,7 @@ class natlas_node:
         if (self.ifname_vbtbl == None):
             self.ifname_vbtbl = self.snmpobj.get_bulk(OID_IFNAME)
 
-        str = self.snmpobj.cache_lookup(self.ifname_vbtbl, OID_IFNAME + '.' + ifidx)
+        str = self.snmpobj.cache_lookup(self.ifname_vbtbl, f"{OID_IFNAME}.{ifidx}")
         str = self.shorten_port_name(str)
 
         return str or 'UNKNOWN'
@@ -747,7 +738,7 @@ class natlas_node:
             return (None, None)
         domain = natlas_snmp.get_last_oid_token(self.vpc_vbtbl[0][0][0])
         ifidx  = str(self.vpc_vbtbl[0][0][1])
-        ifname = self.snmpobj.cache_lookup(ifarr, OID_ETH_IF_DESC + '.' + ifidx)
+        ifname = self.snmpobj.cache_lookup(ifarr, f"{OID_ETH_IF_DESC}.{ifidx}")
         ifname = self.shorten_port_name(ifname)
         return (domain, ifname)
 
@@ -774,25 +765,24 @@ class natlas_node:
         if (self.arp_vbtbl == None):
             self.arp_vbtbl = self.snmpobj.get_bulk(OID_ARP)
         arr = []
-        for r in self.arp_vbtbl:
-            for n, v in r:
-                n = str(n)
-                if (n.startswith(OID_ARP_VLAN)):
-                    tok    = n.split('.')
-                    ip     = '.'.join(tok[11:])
-                    interf = self.__get_ifname(str(v))
-                    mach   = self.snmpobj.cache_lookup(self.arp_vbtbl, OID_ARP_MAC+'.'+str(v)+'.'+ip)
-                    mac    = natlas_mac.mac_hex_to_ascii(mach, 1) 
-                    atype  = self.snmpobj.cache_lookup(self.arp_vbtbl, OID_ARP_TYPE+'.'+str(v)+'.'+ip)
+        for n, v in self.arp_vbtbl:
+            n = str(n)
+            if (n.startswith(OID_ARP_VLAN)):
+                tok    = n.split('.')
+                ip     = '.'.join(tok[11:])
+                interf = self.__get_ifname(str(v))
+                mach   = self.snmpobj.cache_lookup(self.arp_vbtbl, f"{OID_ARP_MAC}.{v}.{ip}")
+                mac    = natlas_mac.mac_hex_to_ascii(mach, 1) 
+                atype  = self.snmpobj.cache_lookup(self.arp_vbtbl, f"{OID_ARP_TYPE}.{v}.{ip}")
 
-                    atype = int(atype)
-                    type_str = 'unknown'
-                    if   (atype == ARP_TYPE_OTHER):     type_str = 'other'
-                    elif (atype == ARP_TYPE_INVALID):   type_str = 'invalid'
-                    elif (atype == ARP_TYPE_DYNAMIC):   type_str = 'dynamic'
-                    elif (atype == ARP_TYPE_STATIC):    type_str = 'static'
+                atype = int(atype)
+                type_str = 'unknown'
+                if   (atype == ARP_TYPE_OTHER):     type_str = 'other'
+                elif (atype == ARP_TYPE_INVALID):   type_str = 'invalid'
+                elif (atype == ARP_TYPE_DYNAMIC):   type_str = 'dynamic'
+                elif (atype == ARP_TYPE_STATIC):    type_str = 'static'
 
-                    arr.append(natlas_arp(ip, mac, interf, type_str))
+                arr.append(natlas_arp(ip, mac, interf, type_str))
         return arr if arr else []
 
 

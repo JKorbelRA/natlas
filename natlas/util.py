@@ -34,9 +34,6 @@ import binascii
 from .snmp import *
 from .config import natlas_config
 
-if (USE_NETADDR == 1):
-    from netaddr import IPAddress, IPNetwork
-
 class util:
 
     def get_net_bits_from_mask(netm):
@@ -94,7 +91,7 @@ class util:
                 host = _host            
 
         # Nexus appends (SERIAL) to hosts
-        host = re.sub('\([^\(]*\)$', '', host)
+        host = re.sub(r'\([^\(]*\)$', '', host)
         for domain in domains:
             host = host.replace(domain, '')
 
@@ -119,7 +116,7 @@ class util:
 
     def get_module_from_interf(port):
         try:
-            s = re.search('[^\d]*(\d*)/\d*/\d*', port)
+            s = re.search(r'[^\d]*(\d*)/\d*/\d*', port)
             if (s):
                 return s.group(1)
         except:
@@ -129,7 +126,7 @@ class util:
 
     def strip_slash_masklen(cidr):
         try:
-            s = re.search('^(.*)/[0-9]{1,2}$', cidr)
+            s = re.search(r'^(.*)/[0-9]{1,2}$', cidr)
             if (s):
                 return s.group(1)
         except:
@@ -139,7 +136,7 @@ class util:
 
     def expand_path_pattern(str):
         try:
-            match = re.search('{([^\}]*)}', str)
+            match = re.search(r'{([^\}]*)}', str)
             tokens = match[1].split('|')
         except:
             return [str]

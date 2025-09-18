@@ -28,6 +28,7 @@ from timeit import default_timer as timer
 from .config import natlas_config
 from .util import *
 from .node import *
+from ipaddress import ip_address, ip_network
 
 DCODE_ROOT              = 0x01
 DCODE_ERR_SNMP          = 0x02
@@ -452,27 +453,21 @@ class natlas_network:
 
     def __match_ip(self, ip, cidr):
         if (cidr == 'any'):
-            return 1
+            return True
+        _cidr = ip_network(cidr)
         
-        validate = re.match('^([0-2]?[0-9]?[0-9]\.){3}[0-2]?[0-9]?[0-9]$', ip)
-        if (validate == None):
-            return 0
+        try:
+            _ip = ip_address(ip)
+        except ValueError:
+            return False
 
-        if (USE_NETADDR):
-            if (ip in IPNetwork(cidr)):
-                return 1
-        else:
-            if (util.is_ipv4_in_cidr(ip, cidr)):
-                return 1
-        return 0
+        return _ip in _cidr
 
 
     def __match_strpattern(self, str, pattern):
         if (str == '*'):
-            return 1
-        if (re.search(pattern, str)):
-            return 1
-        return 0
+            return True
+        return re.search(pattern, str) is not None
 
     #
     # Add or update a link.

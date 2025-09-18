@@ -426,7 +426,7 @@ class natlas_output_diagram:
 
         # IF blocks
         while (1):
-            if_block = re.search('<%if ([^%]*): ([^%]*)%>', fmt_proc)
+            if_block = re.search(r'<%if ([^%]*): ([^%]*)%>', fmt_proc)
             if (if_block == None):
                 break
 
@@ -442,7 +442,7 @@ class natlas_output_diagram:
         fmt_proc = fmt_proc.replace('{node.ip}', ip)
 
         # stackwise
-        stack_block = re.search('<%stack ([^%]*)%>', fmt_proc)
+        stack_block = re.search(r'<%stack ([^%]*)%>', fmt_proc)
         if (stack_block != None):
             if (node.stack.count == 0):
                 # no stackwise, remove this
@@ -461,7 +461,7 @@ class natlas_output_diagram:
                 fmt_proc = fmt_proc[:stack_block.span()[0]] + val + fmt_proc[stack_block.span()[1]:]
         
         # loopbacks
-        loopback_block = re.search('<%loopback ([^%]*)%>', fmt_proc)
+        loopback_block = re.search(r'<%loopback ([^%]*)%>', fmt_proc)
         if (loopback_block != None):
             val = ''
             for lo in node.loopbacks:
@@ -473,7 +473,7 @@ class natlas_output_diagram:
             fmt_proc = fmt_proc[:loopback_block.span()[0]] + val + fmt_proc[loopback_block.span()[1]:]
 
         # SVIs
-        svi_block = re.search('<%svi ([^%]*)%>', fmt_proc)
+        svi_block = re.search(r'<%svi ([^%]*)%>', fmt_proc)
         if (svi_block != None):
             val = ''
             for svi in node.svis:
@@ -485,15 +485,15 @@ class natlas_output_diagram:
             fmt_proc = fmt_proc[:svi_block.span()[0]] + val + fmt_proc[svi_block.span()[1]:]
 
         # replace {stack.} with magic
-        fmt_proc = re.sub('{stack\.(([a-zA-Z])*)}', '$stack2354$\g<1>$stack2354$', fmt_proc)
-        fmt_proc = re.sub('{vss\.(([a-zA-Z])*)}', '$vss2354$\g<1>$vss2354$', fmt_proc)
+        fmt_proc = re.sub(r'{stack\.(([a-zA-Z])*)}', r'$stack2354$\g<1>$stack2354$', fmt_proc)
+        fmt_proc = re.sub(r'{vss\.(([a-zA-Z])*)}', r'$vss2354$\g<1>$vss2354$', fmt_proc)
 
         # {node.} variables
         fmt_proc = fmt_proc.format(node=node)
         
         # replace magics
-        fmt_proc = re.sub('\$stack2354\$(([a-zA-Z])*)\$stack2354\$', '{stack.\g<1>}', fmt_proc)
-        fmt_proc = re.sub('\$vss2354\$(([a-zA-Z])*)\$vss2354\$', '{vss.\g<1>}', fmt_proc)
+        fmt_proc = re.sub(r'\$stack2354\$(([a-zA-Z])*)\$stack2354\$', r'{stack.\g<1>}', fmt_proc)
+        fmt_proc = re.sub(r'\$vss2354\$(([a-zA-Z])*)\$vss2354\$', r'{vss.\g<1>}', fmt_proc)
 
         return fmt_proc
 
